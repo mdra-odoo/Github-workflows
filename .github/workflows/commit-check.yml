@@ -6,9 +6,7 @@ on:
 
 jobs:
   check-commits:
-    name: Validate Commit Messages
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -18,11 +16,24 @@ jobs:
           errors=0
           regex='^\[(FIX|ADD|IMP|REF)\]\ [a-zA-Z0-9_]+:\ .{1,80}$'
 
-          # Get all commit messages in this push or PR
-          git log ${{ github.event.before }}..${{ github.sha }} --pretty=format:"%s" | while read -r line; do
-              if ! echo "$line" | grep -Eq "$regex"; then
-                  echo "❌ Invalid commit message: '$line'"
-                  echo "Expected format: [FIX|ADD|IMP|REF] modulename: message (<= 80 chars)"
+          # Determine commits to check
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+              commit_range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+              # for normal push events
+              if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+                  commit_range="${{ github.sha }}"
+              else
+                  commit_range="${{ github.event.before }}..${{ github.sha }}"
+              fi
+          fi
+
+          echo "Checking commits in range: $commit_range"
+          git log $commit_range --pretty=format:"%H" | while read -r commit; do
+              subject=$(git log -1 --format=%s "$commit")
+              if ! echo "$subject" | grep -Eq "$regex"; then
+                  echo "❌ Invalid commit message: '$subject'"
+                  echo "Expected: [FIX|ADD|IMP|REF] modulename: short message (<=80 chars)"
                   errors=$((errors+1))
               fi
           done
@@ -31,5 +42,5 @@ jobs:
               echo "❌ Found $errors invalid commit message(s)."
               exit 1
           fi
-          
+
           echo "✅ All commit messages follow the format."
