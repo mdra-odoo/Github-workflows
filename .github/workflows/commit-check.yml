@@ -1,0 +1,35 @@
+name: Check Commit Format
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-commits:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate commit messages
+        run: |
+          echo "🔍 Checking commit messages..."
+          errors=0
+          regex='^\[(FIX|ADD|IMP|REF)\]\ [a-zA-Z0-9_]+:\ .{1,80}$'
+
+          # Get all commit messages in this push or PR
+          git log ${{ github.event.before }}..${{ github.sha }} --pretty=format:"%s" | while read -r line; do
+              if ! echo "$line" | grep -Eq "$regex"; then
+                  echo "❌ Invalid commit message: '$line'"
+                  echo "Expected format: [FIX|ADD|IMP|REF] modulename: message (<= 80 chars)"
+                  errors=$((errors+1))
+              fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+              echo "❌ Found $errors invalid commit message(s)."
+              exit 1
+          fi
+          
+          echo "✅ All commit messages follow the format."
