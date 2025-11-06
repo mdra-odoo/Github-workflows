@@ -1,0 +1,62 @@
+name: Validate Commit Message Format
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+  pull_request:
+    branches-ignore:
+      - main
+      - master 
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required for full commit range
+
+      - name: Validate commit messages
+        run: |
+          set -e
+          echo "🔍 Checking commit messages..."
+          errors=0
+          regex='^\[(FIX|ADD|IMP|REF)\]\ [a-zA-Z0-9_]+:\ .{1,80}$'
+
+          # Identify the commit range based on event type
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+              base_sha="${{ github.event.pull_request.base.sha }}"
+              head_sha="${{ github.event.pull_request.head.sha }}"
+              echo "🧩 Checking commits from PR: $base_sha..$head_sha"
+              commits=$(git log "$base_sha".."$head_sha" --pretty=format:"%H" || true)
+          else
+              base_sha="${{ github.event.before }}"
+              head_sha="${{ github.sha }}"
+              echo "🧩 Checking commits from push: $base_sha..$head_sha"
+              commits=$(git log "$base_sha".."$head_sha" --pretty=format:"%H" || true)
+          fi
+
+          # If invalid range or empty, check only latest commit
+          if [ -z "$commits" ]; then
+              echo "⚠️ No commit range found, checking HEAD only."
+              commits=$(git log -1 --pretty=format:"%H" "$head_sha")
+          fi
+
+          for commit in $commits; do
+              subject=$(git log -1 --format=%s "$commit")
+              if ! echo "$subject" | grep -Eq "$regex"; then
+                  echo "❌ Invalid commit message: '$subject'"
+                  echo "   Expected format: [FIX|ADD|IMP|REF] modulename: short message (<=80 chars)"
+                  errors=$((errors+1))
+              fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+              echo "❌ Found $errors invalid commit message(s)."
+              exit 1
+          fi
+
+          echo "✅ All commit messages follow the format."
