@@ -3,8 +3,8 @@ name: Validate Commit Message Format
 on:
   push:
     branches-ignore:
-      - main           # don't run for main
-      - master         # (optional)
+      - main
+      - master
   pull_request:
     branches-ignore:
       - main
